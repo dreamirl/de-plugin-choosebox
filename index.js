@@ -1,8 +1,6 @@
 import DE from '@dreamirl/dreamengine';
 import './index.css';
 
-const TEMPLATE = '<div><div class="name"></div><div class="picture"></div><span class="sizer"></span><span class="content"></span><div class="close"></div></div>';
-
 const DEFAULT_DOM_CONTAINER_ID = 'render';
 
 /***
@@ -15,18 +13,16 @@ const ChooseBox = function()
   this.trigger = this.emit;
   
   this.DEName       = "ChooseBox";
-  this.cboxs        = {};
-  this.ncboxs       = 0;
   this.el           = null;
-  this.template     = TEMPLATE;
   this.inited       = false;
-  this.textView     = null;
-  this.closeBtn     = null;
-  this.wordsArray   = [];
-  this.currentWord  = 0;
-  this.currentLetter= 0;
-  this.isActive     = false;
-  this.typingFx     = '';
+
+  this.choices     = [];
+  this.choiceIndex = 0;
+  this.cursor      = undefined;
+  this.cbox        = undefined;
+  this.callback    = undefined;
+  this.isActive    = false;
+  this.clean       = true;
 
   var _self = this;
 
@@ -36,15 +32,11 @@ const ChooseBox = function()
       return;
     params = params || {};
 
-    this.template = params.template || TEMPLATE;
-    this.typingFx = params.typingFx || '';
-
     let domContainer = document.getElementById( params.containerId || DEFAULT_DOM_CONTAINER_ID );
     
     if ( !domContainer ) {
       throw new Error( "FATAL ERROR: Can't init ChooseBox without an element -- "
-      + "selector:: " + params.selector );
-      return;
+        + "selector:: " + params.selector );
     }
 
     this.el = document.createElement( 'div' );
@@ -52,35 +44,22 @@ const ChooseBox = function()
 
     domContainer.appendChild( this.el );
     this.inited = true;
-    DE.MainLoop.additionalModules[ "ChooseBoxUpdate" ] = this;
     
-    DE.Inputs.on( "keyDown", "choose-down", function()
-    {
-      if ( !_self.currentId )
+    DE.Inputs.on( "keyDown", "choose-down", () => {
+      if ( !_self.isActive )
         return;
-      // go down
+      this.moveCursorTo( this.choiceIndex + 1 );
     } );
-    DE.Inputs.on( "keyDown", "choose-up", function()
-    {
-      if ( !_self.currentId )
+    DE.Inputs.on( "keyDown", "choose-up", () => {
+      if ( !_self.isActive )
         return;
-      // go up
+      this.moveCursorTo( this.choiceIndex - 1 );
     } );
-    DE.Inputs.on( "keyDown", "choose-enter", function()
-    {
-      if ( !_self.currentId )
+    DE.Inputs.on( "keyDown", "choose-enter", () => {
+      if ( !_self.isActive )
         return;
-      // select that message
+      this.selectMessage();
     } );
-    
-    if ( params.useBuffer ) {
-      this.buffer = new DE.PIXI.autoDetectRenderer( 1, 1, {
-        transparent       : true
-        ,clearBeforeRender: true
-        ,autoResize       : true
-      } );
-      this.bufferContainer = new DE.PIXI.Container();
-    }
   };
 
   /****
@@ -97,44 +76,46 @@ const ChooseBox = function()
     if ( !this.inited ) {
       return;
     }
-    
+
     var cbox = document.createElement( 'div' );
     var choices = [];
-    for ( var i = 0, opt; opt[ i ]; ++i ) {
+    for ( let i = 0, opt; opt = options[ i ]; ++i ) {
       let el = document.createElement( 'span' );
       el.className = 'de-choosebox-choice';
       el.innerHTML = opt.key ? DE.Locales.get( opt.key ) : opt.text;
       el.id = i;
 
-      el.addEventListener( "pointerup", function( e )
-      {
-        // TODO choose this choice
+      el.addEventListener( "pointerup", ( e ) => {
+        this.selectMessage();
         e.stopPropagation();
         e.preventDefault();
         return false;
       }, false );
+      el.addEventListener('pointerenter', ( e ) => {
+        this.moveCursorTo( i );
+        e.stopPropagation();
+        e.preventDefault();
+        return false;
+      } );
+
+      let cursor = document.createElement( 'div' );
+      cursor.className = 'de-choosebox-cursor';
+      el.appendChild( cursor );
+
       cbox.appendChild( el );
       choices.push( el );
     }
 
-    var cursor = document.createElement( 'div' );
-    cursor.className = 'de-choosebox-cursor';
-    cbox.appendChild( cursor );
-
-    this.currentChoice = 0;
-    // set cursor position on the current option
-    //cursor.
-
-    this.currentId = cbox.id;
     this.el.appendChild( cbox );
     
     this.cbox    = cbox;
-    this.cursor  = cursor;
+    this.options = options;
     this.choices = choices;
-    
+    this.context = context;
+    this.callback = callback;
     this.trigger( "create", cbox );
+    this.clean = false;
     this.isActive  = true;
-    this.prevented = false;
 
     setTimeout(() => {
       this.moveCursorTo( 0 );
@@ -143,25 +124,48 @@ const ChooseBox = function()
     return cbox;
   };
 
+  this.selectMessage = function()
+  {
+    var opt = this.options[ this.choiceIndex ];
+
+    if ( opt.callback ) {
+      opt.callback.call( opt.context || this.context || this, opt.value );
+    }
+    else {
+      this.callback.call( this.context || this, opt.value );
+    }
+    this.close();
+  }
+
   this.moveCursorTo = function( index )
   {
-    // var choice = this.choices[ index ].style.top;
+    if ( index >= this.choices.length ) {
+      index = 0;
+    }
+    if ( index < 0 ) {
+      index = this.choices.length - 1;
+    }
+
+    this.choices.forEach( el => { el.className = el.className.replace( /active/gi, "" ); } );
+    var choice = this.choices[ index ];
+    choice.className += " active";
+    this.choiceIndex = index;
   };
   
-  this.remove = function()
+  this.close = function()
   {
     if ( !this.cbox ) {
       return;
     }
     
     this.el.removeChild( this.cbox );
-    this.textView  = undefined;
-    this.isActive  = false;
-    this.choices   = [];
-    this.cursor    = undefined;
-    this.currentId = undefined;
-    this.cbox      = undefined;
-    this.clean     = true;
+    this.choices     = [];
+    this.choiceIndex = 0;
+    this.cursor      = undefined;
+    this.cbox        = undefined;
+    this.callback    = undefined;
+    this.isActive    = false;
+    this.clean       = true;
 
     this.trigger( "kill" );
   };

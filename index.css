@@ -1,0 +1,40 @@
+
+#de-plugin-choosebox-container>div {
+  position       : absolute;
+  left           : 50%;
+  top            : 0;
+  width          : 25%;
+  margin-left    : -12.5%;
+  display        : flex;
+  justify-content: center;
+  flex-direction : column;
+  text-align     : center;
+  height         : 100%;
+}
+
+#de-plugin-choosebox-container .de-choosebox-choice {
+  position  : relative;
+  display   : block;
+  border    : 1px solid white;
+  background: #3e3e3e;
+  padding   : 0.4rem;
+  text-align: center;
+  width     : 100%;
+  margin    : 0.5rem 0;
+  font-size: 1.5rem;
+}
+
+#de-plugin-choosebox-container .de-choosebox-cursor {
+  display   : none;
+  position  : absolute;
+  right     : -3rem;
+  width     : 3rem;
+  height    : 3rem;
+  background: red;
+  top       : -1px;
+}
+
+#de-plugin-choosebox-container .de-choosebox-choice:hover .de-choosebox-cursor,
+  #de-plugin-choosebox-container .de-choosebox-choice.active .de-choosebox-cursor {
+  display: block;
+}
